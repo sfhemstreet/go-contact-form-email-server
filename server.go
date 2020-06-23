@@ -28,39 +28,38 @@ type incomingMessage struct {
 var thankYouEmailTemplate = template.Must(template.ParseFiles("htmlTemplates/thankYouEmail.html"))
 
 func main() {
-	// REMOVE BEFORE PUTTING ONLINE ------------------------------ IMPORTANT REMOVE BEFORE PUTTING ONLINE
-	os.Setenv("PRIVATE_EMAIL", "sfhemstreet@gmail.com")
-	os.Setenv("PUBLIC_EMAIL", "spencerhemstreet@gmail.com")
-	os.Setenv("PUBLIC_EMAIL_PASSWORD", "vrklxekhwlaamqob")
-	os.Setenv("ALLOWED_ORIGINS", "http://localhost:1234")
-
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
+	// Allowed Origins for CORS, should be a comma delimited string.
+	ao := os.Getenv("ALLOWED_ORIGINS")
+	if ao == "" {
 		log.Fatal("ALLOWED_ORIGINS env variable not set")
 	}
 
-	allowedOriginsSlice := strings.Split(allowedOrigins, ",")
+	allowedOrigins := strings.Split(ao, ",")
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT env variable not set")
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/contactFormEmail", handleMail)
 
 	handler := cors.New(cors.Options{
-		AllowedOrigins:   allowedOriginsSlice,
+		AllowedOrigins:   allowedOrigins,
 		AllowCredentials: true,
 		AllowedMethods:   []string{"POST", "post"},
-		Debug:            true,
+		Debug:            false,
 	}).Handler(mux)
 
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(http.ListenAndServe(":" + port, handler))
 }
 
 // handleMail sends a reply email to whoever sent me a message from my website,
 // and also forwards the message they sent to my private email.
 func handleMail(w http.ResponseWriter, r *http.Request) {
 
-	// Public Email is the email I am using to send emails.
-	// Public Email Password is used to set up the Auth for smtp.SendMail.
-	// Private Email is the email I forward the inMsg to.
+	// publicEmail is the email I am using to send emails.
+	// publicEmailPassword is used to set up the Auth for smtp.SendMail.
+	// privateEmail is the email I forward the inMsg to.
 	publicEmail := os.Getenv("PUBLIC_EMAIL")
 	publicEmailPassword := os.Getenv("PUBLIC_EMAIL_PASSWORD")
 	privateEmail := os.Getenv("PRIVATE_EMAIL")
