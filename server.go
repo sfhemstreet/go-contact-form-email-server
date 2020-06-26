@@ -1,4 +1,4 @@
-// Server used for recieving messages from website contact form.
+// Server used for receiving messages from website contact form.
 // Sends reply email to messanger and forwards message to private email.
 package main
 
@@ -14,6 +14,7 @@ import (
 	"net/smtp"
 	"os"
 	"strings"
+	"regexp"
 )
 
 // incomingMessage defines the structure of the message sent in the request body
@@ -24,8 +25,15 @@ type incomingMessage struct {
 	Body  string
 }
 
-// Template for sending thank you email reply.
-var thankYouEmailTemplate = template.Must(template.ParseFiles("htmlTemplates/thankYouEmail.html"))
+// These variables must compile.
+var (
+	// HTML Template for sending thank you email reply.
+	thankYouEmailTemplate = template.Must(template.ParseFiles("htmlTemplates/thankYouEmail.html"))
+	// RegExp for email and all other text fields.
+	emailRegExp = regexp.MustCompile(`^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$`)
+	textRegExp = regexp.MustCompile(`^[$!@&#%?'":,^a-z A-Z0-9_.-]*$`)
+)
+
 
 func main() {
 	// Allowed Origins for CORS, should be a comma delimited string.
@@ -85,6 +93,10 @@ func handleMail(w http.ResponseWriter, r *http.Request) {
 			log.Println(err.Error())
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
+		return
+	}
+
+	if !validateIncomingMessage(w, inMsg) {
 		return
 	}
 
@@ -175,7 +187,7 @@ func makeReplyEmail(inMsg incomingMessage, fromEmail string) string {
 	return message
 }
 
-// makeForwardEmail creates an email that is just plain text, with details about the message recieved from the client.
+// makeForwardEmail creates an email that is just plain text, with details about the message received from the client.
 func makeForwardEmail(inMsg incomingMessage, toEmail string, fromEmail string) string {
 	header := make(map[string]string)
 	header["From"] = fmt.Sprintf("Spencer Hemstreet <%s>", fromEmail)
@@ -193,4 +205,29 @@ func makeForwardEmail(inMsg incomingMessage, toEmail string, fromEmail string) s
 	message += body
 
 	return message
+}
+
+// validateIncomingMessage checks to make sure all fields of the message conform to our standards.
+// ie highly probable email address, ban certain characters from other fields.
+func validateIncomingMessage(w http.ResponseWriter, inMsg incomingMessage) bool {
+	// I am choosing not to give hints about what is invalid back to client
+	// because if a field does not pass I know the user is bypassing validation I wrote on the frontend.
+	// Return an http error on first occurrence of bad value.
+	if !emailRegExp.MatchString(inMsg.Email) {
+		http.Error(w, "Request body contains an inappropriate value.", http.StatusBadRequest)
+		return false
+	}
+	if !textRegExp.MatchString(inMsg.Name) {
+		http.Error(w, "Request body contains an inappropriate value.", http.StatusBadRequest)
+		return false
+	}
+	if !textRegExp.MatchString(inMsg.Title) {
+		http.Error(w, "Request body contains an inappropriate value.", http.StatusBadRequest)
+		return false
+	}
+	if !textRegExp.MatchString(inMsg.Body) {
+		http.Error(w, "Request body contains an inappropriate value.", http.StatusBadRequest)
+		return false
+	}
+	return true
 }
